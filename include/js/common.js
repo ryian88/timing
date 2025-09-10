@@ -132,8 +132,8 @@ class GameScene extends Phaser.Scene {
 
   handlePlayerMovement() {
     const speed = 300;
-    let vx = 0,
-      anim = "turn";
+    let vx = 0;
+    let anim = "turn";
 
     if (this.cursors.left.isDown) (vx = -speed), (anim = this.player.change ? "left_alt" : "left");
     else if (this.cursors.right.isDown) (vx = speed), (anim = this.player.change ? "right_alt" : "right");
@@ -143,7 +143,7 @@ class GameScene extends Phaser.Scene {
     this.player.anims.play(anim, true);
 
     if (this.cursors.up.isDown && this.player.body.touching.down) this.player.setVelocityY(-330);
-    if (this.cursors.down.isDown) this.player.setVelocityY(600);
+    if (this.cursors.down.isDown) this.player.setVelocityY(800);
   }
 
   hitButton() {
@@ -153,10 +153,8 @@ class GameScene extends Phaser.Scene {
       setGameState("star");
 
       // 이미지 변경
-      this.player.setTexture("dude_change");
-      // 상태 플래그
+      this.player.setTexture("dude_change");      
       this.player.change = true;
-
       this.button.destroy();
     }
   }
@@ -193,7 +191,7 @@ class GameScene extends Phaser.Scene {
 
   // 캔디 생성
   spawnCandies(stage) {
-    const total = 10;
+    const total = 20;
     const probTable = {
       0: { fail: 1, normal: 0, rare: 0 },
       1: { fail: 0.5, normal: 0.4, rare: 0.1 },
@@ -202,17 +200,15 @@ class GameScene extends Phaser.Scene {
       4: { fail: 0, normal: 0, rare: 1 },
     };
     for (let i = 0; i < total; i++) {
-      const rand = Math.random();
-      const p = probTable[stage];
-      let type = rand < p.fail ? "candy_fail" : rand < p.fail + p.normal ? "candy_normal" : "candy_rare";
+      let type = Math.random() < probTable[stage].fail ? "candy_fail" : Math.random() < probTable[stage].fail + probTable[stage].normal ? "candy_normal" : "candy_rare";
       const candy = this.candies.create(Phaser.Math.Between(50, GAME_WIDTH - 50), Phaser.Math.Between(0, 300), type);
       const radius = candy.displayWidth / 2;
-      candy.body.setCircle(radius);
-      candy.body.setGravityY(500);
-      candy.setBounce(1);
-      candy.setCollideWorldBounds(true);
-      candy.setVelocity(Phaser.Math.Between(-200, 200), 20);
-      candy.setAngularVelocity(Phaser.Math.Between(-200, 200));
+      candy.body.setCircle(radius); // 충돌 영역
+      candy.body.setGravityY(500); // 중력
+      candy.setBounce(1); // 바운스
+      candy.setCollideWorldBounds(true); // 벽과 충돌
+      candy.setVelocity(Phaser.Math.Between(-200, 200), Phaser.Math.Between(-200, 200)); // 속도
+      candy.setAngularVelocity(Phaser.Math.Between(-200, 200)); // 회전
     }
     this.physics.add.collider(this.candies, this.ground);
     this.physics.add.collider(this.candies, this.candies);
