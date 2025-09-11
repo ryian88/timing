@@ -66,7 +66,7 @@ class GameScene extends Phaser.Scene {
     this.createMonsterGroup();
     this.setupInput();
     this.stopped = false;
-    // this.spawnMonster();
+    // this.spawnMonster();   
   }
 
   setupGame(resetScore = true) {
@@ -138,7 +138,7 @@ class GameScene extends Phaser.Scene {
 
   createMonsterGroup() {
     this.monsters = this.physics.add.group();
-    this.physics.add.collider(this.player, this.monsters, this.hitMonster, null, this);
+    this.physics.add.overlap(this.player, this.monsters, this.hitMonster, null, this);
     this.physics.add.collider(this.monsters, this.ground);
     this.physics.add.collider(this.monsters, this.button);
     this.physics.add.collider(this.monsters, this.monsters, (m1, m2) => {
@@ -159,7 +159,7 @@ class GameScene extends Phaser.Scene {
       bigger.setScale(bigger.scale + 0.1);
 
       // 원형 충돌 영역 다시 중앙 기준으로 맞추기 (필요시)
-      const radius = Math.min(bigger.width, bigger.height) / 2.5;
+      const radius = Math.min(bigger.width, bigger.height) / 2;
       const offsetX = (bigger.width - radius * 2) / 2;
       const offsetY = (bigger.height - radius * 2) / 2;
       bigger.body.setCircle(radius, offsetX, offsetY);
@@ -175,7 +175,7 @@ class GameScene extends Phaser.Scene {
     monster.body.setGravityY(GRAVITY_Y); // 중력
 
     // 원본 이미지 기준으로 body 원형 설정
-    const radius = Math.min(monster.width, monster.height) / 2.5; // 이미지보다 작게 (2일떄가 원본값)
+    const radius = Math.min(monster.width, monster.height) / 2; // 이미지보다 작게 (2일떄가 원본값)
     const offsetX = (monster.width - radius * 2) / 2;
     const offsetY = (monster.height - radius * 2) / 2;
     monster.body.setCircle(radius, offsetX, offsetY);
@@ -249,7 +249,10 @@ class GameScene extends Phaser.Scene {
   }
 
   hitMonster(player, monster) {
+    
+
     this.stopped = true;
+    
     this.physics.pause();
     this.player.setTint(0xff0000);
     result.textContent = "Game Over!";
