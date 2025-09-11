@@ -1,6 +1,20 @@
 const GAME_WIDTH = 1280;
 const GAME_HEIGHT = 720;
 
+const PLAYER_SPEED = 300;
+const JUMP_SPEED = -330;
+const GRAVITY_Y = 300;
+const CANDY_TOTAL = 20;
+const TIMER_DURATION = 10; // 게임 종료까지 시간
+const SCORE_MAP = { candy_fail: 1, candy_normal: 10, candy_rare: 30 };
+const probTable = {
+  0: { fail: 1, normal: 0, rare: 0 },
+  1: { fail: 0.5, normal: 0.4, rare: 0.1 },
+  2: { fail: 0.2, normal: 0.5, rare: 0.3 },
+  3: { fail: 0, normal: 0.3, rare: 0.7 },
+  4: { fail: 0, normal: 0, rare: 1 },
+};
+
 const scoreDisplay = document.querySelector(".score");
 const result = document.querySelector(".result");
 const targetTime = document.querySelector(".targetTime");
@@ -52,6 +66,7 @@ class GameScene extends Phaser.Scene {
     this.createMonsterGroup();
     this.setupInput();
     this.stopped = false;
+    // this.spawnMonster();
   }
 
   setupGame(resetScore = true) {
@@ -60,7 +75,14 @@ class GameScene extends Phaser.Scene {
     this.currentTime = 0;
     currentTime.textContent = "0.000";
     if (resetScore) this.score = 0;
+    this.updateScore();
+  }
+
+  updateScore() {
     scoreDisplay.textContent = `Score: ${this.score}`;
+  }
+  updateTimer() {
+    currentTime.textContent = this.currentTimeVal.toFixed(3);
   }
 
   // 플레이어 애니메이션
@@ -69,13 +91,11 @@ class GameScene extends Phaser.Scene {
       { prefix: "", sprite: "dude" },
       { prefix: "_alt", sprite: "dude_change" },
     ];
-
     const actions = [
       { key: "left", start: 0, end: 3, frameRate: 10, repeat: -1 },
       { key: "turn", start: 4, end: 4, frameRate: 20, repeat: 0 },
       { key: "right", start: 5, end: 8, frameRate: 10, repeat: -1 },
     ];
-
     types.forEach(type => {
       actions.forEach(action => {
         this.anims.create({
@@ -88,21 +108,21 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  // 플레이어 생성
-  createPlayer() {
-    this.player = this.physics.add.sprite(GAME_WIDTH / 2, GAME_HEIGHT - 100, "dude");
-    // this.player.setBounce(0.2);
-    this.player.setCollideWorldBounds(true);
-    this.player.setScale(0.15);
-    this.physics.add.collider(this.player, this.ground);
-  }
-
   createGround() {
     this.ground = this.physics.add.staticGroup();
     this.ground
       .create(GAME_WIDTH / 2, GAME_HEIGHT - 40, "ground")
       .setScale(GAME_WIDTH, 2)
       .refreshBody();
+  }
+
+  // 플레이어 생성
+  createPlayer() {
+    this.player = this.physics.add
+      .sprite(GAME_WIDTH / 2, GAME_HEIGHT - 100, "dude")
+      .setCollideWorldBounds(true)
+      .setScale(0.15);
+    this.physics.add.collider(this.player, this.ground);
   }
 
   // stop 버튼 생성
@@ -120,17 +140,52 @@ class GameScene extends Phaser.Scene {
     this.monsters = this.physics.add.group();
     this.physics.add.collider(this.player, this.monsters, this.hitMonster, null, this);
     this.physics.add.collider(this.monsters, this.ground);
-    this.physics.add.collider(this.monsters, this.monsters);
-    this.physics.add.collider(this.monsters, this.candies);
-    // this.physics.add.overlap(
-    //   this.monsters,
-    //   this.candies,
-    //   (monster, candy) => {
-    //     candy.setVelocityY(-candy.body.velocity.y); // 반대로 튕기게
-    //   },
-    //   null,
-    //   this
-    // );
+    this.physics.add.collider(this.monsters, this.button);
+    this.physics.add.collider(this.monsters, this.monsters, (m1, m2) => {
+      // 스케일 비교
+      let bigger, smaller;
+      if (m1.scale >= m2.scale) {
+        bigger = m1;
+        smaller = m2;
+      } else {
+        bigger = m2;
+        smaller = m1;
+      }
+
+      // 작은 몬스터 제거
+      smaller.disableBody(true, true);
+
+      // 큰 몬스터 스케일 증가
+      bigger.setScale(bigger.scale + 0.1);
+
+      // 원형 충돌 영역 다시 중앙 기준으로 맞추기 (필요시)
+      const radius = Math.min(bigger.width, bigger.height) / 2.5;
+      const offsetX = (bigger.width - radius * 2) / 2;
+      const offsetY = (bigger.height - radius * 2) / 2;
+      bigger.body.setCircle(radius, offsetX, offsetY);
+    });
+
+    this.physics.add.overlap(this.monsters, this.candies, (m, c) => c.disableBody(true, true));
+  }
+
+  // 몬스터 스폰 함수
+  spawnMonster() {
+    const monster = this.monsters.create(Phaser.Math.Between(50, GAME_WIDTH - 50), -100, "monster");
+    monster.setBounce(0.9).setCollideWorldBounds(true);
+    monster.body.setGravityY(GRAVITY_Y); // 중력
+
+    // 원본 이미지 기준으로 body 원형 설정
+    const radius = Math.min(monster.width, monster.height) / 2.5; // 이미지보다 작게 (2일떄가 원본값)
+    const offsetX = (monster.width - radius * 2) / 2;
+    const offsetY = (monster.height - radius * 2) / 2;
+    monster.body.setCircle(radius, offsetX, offsetY);
+    monster.setScale(0.1); // 나중에 스케일 적용
+    monster.setVelocity(Phaser.Math.Between(-100, 100), 20);
+    this.monsters.children.iterate(m => {
+      m.y = -100;
+      m.body.updateFromGameObject(); // 물리엔진 좌표 갱신
+    });
+    return monster;
   }
 
   setupInput() {
@@ -141,7 +196,7 @@ class GameScene extends Phaser.Scene {
     if (!this.stopped) {
       this.currentTime += delta / 1000;
       currentTime.textContent = this.currentTime.toFixed(3);
-      if (this.currentTime >= 10) {
+      if (this.currentTime >= TIMER_DURATION) {
         this.stopped = true;
         this.endGame();
         return;
@@ -160,19 +215,19 @@ class GameScene extends Phaser.Scene {
   }
 
   handlePlayerMovement() {
-    const speed = 300;
-    let vx = 0;
-    let anim = "turn";
-
-    if (this.cursors.left.isDown) (vx = -speed), (anim = this.player.change ? "left_alt" : "left");
-    else if (this.cursors.right.isDown) (vx = speed), (anim = this.player.change ? "right_alt" : "right");
-    else anim = this.player.change ? "turn_alt" : "turn";
-
+    let vx = 0,
+      anim = this.player.change ? "turn_alt" : "turn";
+    if (this.cursors.left.isDown) {
+      vx = -PLAYER_SPEED;
+      anim = this.player.change ? "left_alt" : "left";
+    } else if (this.cursors.right.isDown) {
+      vx = PLAYER_SPEED;
+      anim = this.player.change ? "right_alt" : "right";
+    }
     this.player.setVelocityX(vx);
     this.player.anims.play(anim, true);
-
-    if (this.cursors.up.isDown && this.player.body.touching.down) this.player.setVelocityY(-330);
-    if (this.cursors.down.isDown) this.player.setVelocityY(800);
+    if (this.cursors.up.isDown && this.player.body.touching.down) this.player.setVelocityY(JUMP_SPEED);
+    if (this.cursors.down.isDown) this.player.setVelocityY(-JUMP_SPEED * 2.5); // 기존 800
   }
 
   hitButton() {
@@ -187,12 +242,10 @@ class GameScene extends Phaser.Scene {
     }
   }
 
-  // 점수 증가
   collectCandy(player, candy) {
-    const scoreMap = { candy_fail: 1, candy_normal: 10, candy_rare: 30 };
-    this.score += scoreMap[candy.texture.key] || 0; // 캔디 종류에 맞는 점수 부여 (없으면 0점)
-    scoreDisplay.textContent = `Score: ${this.score}`;
-    candy.disableBody(true, true); // 먹은 캔디 제거
+    this.score += SCORE_MAP[candy.texture.key] || 0;
+    this.updateScore();
+    candy.disableBody(true, true);
   }
 
   hitMonster(player, monster) {
@@ -210,7 +263,6 @@ class GameScene extends Phaser.Scene {
     let currentHTML = "",
       correct = true,
       stage = 0;
-
     for (let i = 0; i < currentStr.length; i++) {
       if (correct && targetStr[i] === currentStr[i]) {
         currentHTML += `<span style="color:#0f0">${currentStr[i]}</span>`;
@@ -221,53 +273,41 @@ class GameScene extends Phaser.Scene {
       }
     }
     currentTime.innerHTML = currentHTML;
-
     this.spawnCandies(stage);
     this.startStageTimer(stage);
   }
 
-  // 캔디 생성
   spawnCandies(stage) {
-    const total = 20;
-    const probTable = {
-      0: { fail: 1, normal: 0, rare: 0 },
-      1: { fail: 0.5, normal: 0.4, rare: 0.1 },
-      2: { fail: 0.2, normal: 0.5, rare: 0.3 },
-      3: { fail: 0, normal: 0.3, rare: 0.7 },
-      4: { fail: 0, normal: 0, rare: 1 },
+    const getCandyType = () => {
+      const prob = probTable[stage];
+      const r = Math.random();
+      if (r < prob.fail) return "candy_fail";
+      if (r < prob.fail + prob.normal) return "candy_normal";
+      return "candy_rare";
     };
-
-    let spawned = 0;
     this.time.addEvent({
-      delay: 150,
-      repeat: total - 1,
+      delay: 100,
+      repeat: CANDY_TOTAL - 1,
       callback: () => {
-        spawned++;
-
-        let type = Math.random() < probTable[stage].fail ? "candy_fail" : Math.random() < probTable[stage].fail + probTable[stage].normal ? "candy_normal" : "candy_rare";
-        const candy = this.candies.create(this.button.x + Phaser.Math.Between(-20, 20), this.button.y - 30, type);
-        const radius = candy.displayWidth / 2;
-        candy.body.setCircle(radius); // 충돌 영역
-        candy.body.setGravityY(500); // 중력
-        candy.setBounce(1); // 바운스
-        candy.setCollideWorldBounds(true); // 벽과 충돌
-        candy.setAngularVelocity(Phaser.Math.Between(-200, 200)); // 회전
-
-        const angle = Phaser.Math.Between(-40, -140); // 퍼짐 각도 (왼쪽 위~오른쪽 위)
-        const speed = Phaser.Math.Between(600, 800); // 위로 뿜는 속도
+        const candy = this.candies.create(this.button.x + Phaser.Math.Between(-20, 20), this.button.y - 30, getCandyType());
+        candy.body.setCircle(candy.displayWidth / 2);
+        candy.body.setGravityY(GRAVITY_Y);
+        candy.setBounce(1);
+        candy.setCollideWorldBounds(true);
+        candy.setAngularVelocity(Phaser.Math.Between(-200, 200));
+        const angle = Phaser.Math.Between(-40, -140),
+          speed = Phaser.Math.Between(600, 800);
         this.physics.velocityFromAngle(angle, speed, candy.body.velocity);
       },
     });
-
     this.physics.add.collider(this.candies, this.ground);
     this.physics.add.collider(this.candies, this.candies);
     this.physics.add.collider(this.candies, this.button);
   }
 
   startStageTimer(stage) {
-    let remaining = 10; // 항상 10초로 고정
+    let remaining = TIMER_DURATION;
     result.textContent = `${remaining.toFixed(3)}`;
-
     this.timerEvent = this.time.addEvent({
       delay: 10,
       loop: true,
@@ -295,23 +335,10 @@ class GameScene extends Phaser.Scene {
       this.physics.resume();
       this.player.clearTint();
       this.candies.clear(true, true); // 이전 사탕 제거
-      this.button.destroy();
       this.createButton();
       this.setupGame(false); // 점수 유지
       this.stopped = false;
-
-      // 새 몬스터 추가
-      const monster = this.monsters.create(Phaser.Math.Between(50, GAME_WIDTH - 50), -100, "monster");
-      monster.setBounce(0.4);
-      monster.setScale(0.12);
-      monster.setCollideWorldBounds(true);
-      monster.setVelocity(Phaser.Math.Between(-100, 100), 20);
-      monster.setGravityY(200);
-
-      this.monsters.children.iterate(m => {
-        m.y = -100;
-        m.body.updateFromGameObject(); // 물리엔진 좌표 갱신
-      });
+      this.spawnMonster();
     };
     setGameState("nextlevel");
   }
